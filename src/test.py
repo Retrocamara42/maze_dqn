@@ -3,6 +3,7 @@ from random import randint
 import random, copy
 from collections import defaultdict
 from tensorforce.agents import DQNAgent
+import tensorflow as tf
 
 class StackList(object):
     def __init__(self):
@@ -151,9 +152,43 @@ class Maze(pygame.sprite.Sprite):
     def ponerMetaEn(self, x, y):
         self.maze[y][x]=2
 
+class MyDQNAgent(object):
+    def __init__(self,states,actions):
+        self.q_agent = DQNAgent(states, actions,
+            network = [#dict(type='flatten'),
+                dict(type='dense', size=32),
+                dict(type='dense', size=32)],
+            update_mode=dict(
+                unit='timesteps',
+                batch_size=8,
+                frequency=8
+            ),
+            memory=dict(
+                type='replay',
+                include_next_states=True,
+                capacity=100
+            ),
+            optimizer=dict(
+                type='adam',
+                learning_rate=1e-2
+            ),
+            states_preprocessing=[
+                dict(type='normalize'),
+                #dict(type='running_standardize'),
+                #dict(type='sequence')
+            ],
+            target_sync_frequency=10,
+            actions_exploration=dict(
+                 type="epsilon_decay",
+                 initial_epsilon=1.0,
+                 final_epsilon=0.1,
+                 timesteps=10
+            )
+        )
+
 
 class Ball(pygame.sprite.Sprite):
-    def __init__(self, mapa, pos=(0, 0)):
+    def __init__(self, mapa, pos_inicial, pos=(0, 0)):
         pygame.sprite.Sprite.__init__(self)
         self.pos = pos
         self.image = pygame.Surface((15, 15)).convert()
@@ -161,14 +196,19 @@ class Ball(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=self.pos)
         self.speed_x = 0
         self.speed_y = 0
-        self.last_move = 0
-        self.map_x = 1
-        self.map_y = 1
+        self.last_move = 4
+        self.map_x = pos_inicial[0]
+        self.map_y = pos_inicial[1]
+        self.prev_x = 1
+        self.prev_y = 1
         tamaño = (len(mapa[0]),len(mapa))
-        self.states = {'type':'float','shape':(tamaño[0],tamaño[1])}
-        self.actions = {'type':'bool','shape':(4,)}
-        self.network = [dict(type='flatten'), dict(type='dense', size=16), dict(type='dense', size=16)]
-        self.q_agent = DQNAgent(self.states, self.actions, self.network)
+
+        #states = dict(type='float',shape=(tamaño[0],tamaño[1]))
+        states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
+        actions = dict( type='int',shape=(1,),num_actions=5 )
+        myAgent = MyDQNAgent(states,actions)
+        self.q_agent =  myAgent.q_agent
+
         self.mapa = copy.deepcopy(mapa)
         self.mapa[self.map_y][self.map_x] = 3
 
@@ -183,29 +223,50 @@ class Ball(pygame.sprite.Sprite):
             self.mapa[self.map_y][self.map_x-1]=valido
         self.mapa[self.map_y][self.map_x]=3
 
-    def reset(self, map_x, map_y):
+    def reset(self, map_x, map_y, mapa):
+        self.pos = (map_x*16,map_y*16)
+        self.rect = self.image.get_rect(center=self.pos)
+        self.last_move = 4
+        self.prev_x = 1
+        self.prev_y = 1
+        self.speed_x = 0
+        self.speed_y = 0
+        self.mapa = copy.deepcopy(mapa)
         self.map_x = map_x
         self.map_y = map_y
-        self.actualizarMapa(2)
+        self.mapa[self.map_y][self.map_x]=3
+
+    def update(self):
+        self.rect.move_ip(self.speed_x, self.speed_y)
+        self.speed_x = 0
+        self.speed_y = 0
 
     def neg_y(self,valido):
+        #print("Arriba")
         self.speed_y += -16
         self.last_move = 0
+        self.prev_y = self.map_y
         self.map_y += -1
         self.actualizarMapa(valido)
     def neg_x(self,valido):
+        #print("Izquierda")
         self.speed_x += -16
         self.last_move = 1
+        self.prev_x = self.map_x
         self.map_x += -1
         self.actualizarMapa(valido)
     def pos_y(self,valido):
+        #print("Abajo")
         self.speed_y += 16
         self.last_move = 2
+        self.prev_y = self.map_y
         self.map_y += 1
         self.actualizarMapa(valido)
     def pos_x(self,valido):
+        #print("Derecha")
         self.speed_x += 16
         self.last_move = 3
+        self.prev_x = self.map_x
         self.map_x += 1
         self.actualizarMapa(valido)
 
@@ -224,22 +285,24 @@ class Ball(pygame.sprite.Sprite):
         self.speed_y = 0
 
     def moverse(self, actions):
-        if (actions[0]==1):
+        if (actions==0):
             self.pos_x(0)
-        elif (actions[1]==1):
-            self.neg_y(0)
-        elif (actions[2]==1):
-            self.neg_x(0)
-        elif (actions[3]==1):
+        elif (actions==1):
             self.pos_y(0)
-
+        elif (actions==2):
+            self.neg_x(0)
+        elif (actions==3):
+            self.neg_y(0)
+        elif (actions==4):
+            self.last_move=4
 
 def main():
-    size = width, height = 500, 500
+    size = width, height = 300, 300
     screen = pygame.display.set_mode(size)
     pygame.display.set_caption('Maze')
     meta = (3,3)
     tamaño = (7,7)
+    pos_inicial = (1,1)
     try:
         filename = os.path.join(
 	    os.path.dirname(__file__),
@@ -257,7 +320,7 @@ def main():
     maze.crearRectangulos()
 
     # Insertamos esta linea aqui
-    ball = Ball(maze.maze,(16,16))
+    ball = Ball(maze.maze,pos_inicial,(16,16))
 
     sprites = pygame.sprite.Group(ball)
 
@@ -269,6 +332,7 @@ def main():
 
     stay = 1
     num_pasos = 0
+    flat_mapa = []
     ball.q_agent.restore_model("./model")
 
     while stay:
@@ -283,9 +347,16 @@ def main():
                  stay=0
 
         num_pasos += 1
-        actions = ball.q_agent.act(ball.mapa)
+        for i in range(len(ball.mapa)):
+            for j in range(len(ball.mapa[0])):
+                flat_mapa.append(ball.mapa[i][j])
+        flat_mapa.append(num_pasos)
+
+        actions = ball.q_agent.act(flat_mapa, deterministic=False)
+        flat_mapa = []
+
         ball.moverse(actions)
-        print(actions)
+        print(actions[0])
 
         if (maze.buscarColisiones(ball.map_x, ball.map_y)==1):
             ball.move_back()
@@ -298,6 +369,8 @@ def main():
         sprites.draw(screen)
         maze.show()
         pygame.display.flip()
+
+        #input()
 
     pygame.quit()
 
