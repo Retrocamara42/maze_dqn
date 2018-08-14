@@ -155,7 +155,8 @@ class Maze(pygame.sprite.Sprite):
 class MyDQNAgent(object):
     def __init__(self,states,actions):
         self.q_agent = DQNAgent(states, actions,
-            network = [#dict(type='flatten'),
+            network = [dict(type='conv2d', size=3),
+                dict(type='flatten'),
                 dict(type='dense', size=32),
                 dict(type='dense', size=32)],
             update_mode=dict(
@@ -203,8 +204,8 @@ class Ball(pygame.sprite.Sprite):
         self.prev_y = 1
         tamaño = (len(mapa[0]),len(mapa))
 
-        #states = dict(type='float',shape=(tamaño[0],tamaño[1]))
-        states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
+        states = dict(type='float',shape=(1,tamaño[0],tamaño[1]))
+        #states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
         actions = dict( type='int',shape=(1,),num_actions=5 )
         myAgent = MyDQNAgent(states,actions)
         self.q_agent =  myAgent.q_agent
@@ -295,6 +296,8 @@ class Ball(pygame.sprite.Sprite):
             self.neg_y(0)
         elif (actions==4):
             self.last_move=4
+            self.prev_x = self.map_x
+            self.prev_y = self.map_y
 
 
 def main():
@@ -348,49 +351,50 @@ def main():
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                  stay=0
 
-        for i in range(len(ball.mapa)):
-            for j in range(len(ball.mapa[0])):
-                flat_mapa.append(ball.mapa[i][j])
-        flat_mapa.append(num_pasos)
+        #for i in range(len(ball.mapa)):
+        #    for j in range(len(ball.mapa[0])):
+        #        flat_mapa.append(ball.mapa[i][j])
+        #flat_mapa.append(num_pasos/300)
 
-        actions = ball.q_agent.act(flat_mapa, deterministic=False)
-        flat_mapa = []
+        actions = ball.q_agent.act([ball.mapa], deterministic=False)
+        #actions = ball.q_agent.act(flat_mapa, deterministic=False)
+        #flat_mapa = []
 
         ball.moverse(actions[0])
 
         if (num_pasos>=300):
             print("Reset")
-            ball.q_agent.observe(1,-200)
+            ball.q_agent.observe(1,0)
             print("Intento: %d" %intento)
             intento+=1
             num_pasos=0
-            maze.maze = None
-            maze.create()
+            maze = None
+            maze = Maze(screen, tamaño[0], tamaño[1])
             maze.ponerMetaEn(meta[0],meta[1])
             maze.crearRectangulos()
             ball.reset(1,1,maze.maze)
         elif (maze.buscarColisiones(ball.map_x, ball.map_y)==1):
             #print("Choque")
-            ball.q_agent.observe(0,-15)
+            ball.q_agent.observe(0,-10)
             ball.move_back()
         elif(maze.buscarColisiones(ball.map_x, ball.map_y)==2):
             print("Meta")
             print("Num. pasos: %d" %num_pasos)
-            ball.q_agent.observe(1,400-num_pasos)
+            ball.q_agent.observe(1,700-num_pasos)
             print("Intento: %d" %intento)
             intento+=1
             num_pasos=0
             maze = None
-            maze.create()
+            maze = Maze(screen, tamaño[0], tamaño[1])
             maze.ponerMetaEn(meta[0],meta[1])
             maze.crearRectangulos()
             ball.reset(1,1,maze.maze)
         elif((ball.map_x != ball.prev_x)or(ball.map_y != ball.prev_y)):
             #print("Movida")
-            ball.q_agent.observe(0,20)
+            ball.q_agent.observe(0,1)
         else:
             #print("Alto")
-            ball.q_agent.observe(0,-30)
+            ball.q_agent.observe(0,-40)
 
         #screen.blit(background,(0, 0))
         #sprites.update()
@@ -398,6 +402,7 @@ def main():
         #maze.show()
         #sprites.draw(screen)
         #pygame.display.flip()
+        #input()
 
     pygame.quit()
     ball.q_agent.save_model("./model/model",1)
