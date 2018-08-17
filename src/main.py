@@ -4,6 +4,8 @@ import random, copy
 from collections import defaultdict
 from tensorforce.agents import DQNAgent
 import tensorflow as tf
+import warnings
+warnings.filterwarnings('ignore')
 
 class StackList(object):
     def __init__(self):
@@ -32,7 +34,7 @@ class Maze(pygame.sprite.Sprite):
     def __init__(self, screen, width=21, height=21, exit_cell=(1, 1)):
         pygame.sprite.Sprite.__init__(self)
         if width % 2 == 0:
-            width += 1
+            width += 1 
         if height % 2 == 0:
             height += 1
         self.width = width
@@ -204,7 +206,7 @@ class Ball(pygame.sprite.Sprite):
         self.prev_y = 1
         tamaño = (len(mapa[0]),len(mapa))
 
-        states = dict(type='float',shape=(1,tamaño[0],tamaño[1]))
+        states = dict(type='float',shape=(2,tamaño[0],tamaño[1]))
         #states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
         actions = dict( type='int',shape=(1,),num_actions=5 )
         myAgent = MyDQNAgent(states,actions)
@@ -337,7 +339,8 @@ def main():
     stay = 1
     num_pasos = 0
     intento = 0
-    flat_mapa = []
+#    flat_mapa = []
+    mapa_anterior = copy.deepcopy(ball.mapa)
 
     while stay:
         clock.tick(fps)
@@ -356,10 +359,10 @@ def main():
         #        flat_mapa.append(ball.mapa[i][j])
         #flat_mapa.append(num_pasos/300)
 
-        actions = ball.q_agent.act([ball.mapa], deterministic=False)
+        actions = ball.q_agent.act([mapa_anterior, ball.mapa], deterministic=False)
         #actions = ball.q_agent.act(flat_mapa, deterministic=False)
         #flat_mapa = []
-
+        mapa_anterior = copy.deepcopy(ball.mapa)
         ball.moverse(actions[0])
 
         if (num_pasos>=300):
