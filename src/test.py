@@ -159,8 +159,8 @@ class MyDQNAgent(object):
         self.q_agent = DQNAgent(states, actions,
             network = [dict(type='conv2d', size=3),
                 dict(type='flatten'),
-                dict(type='dense', size=32),
-                dict(type='dense', size=32)],
+                dict(type='dense', size=64),
+                dict(type='dense', size=64)],
             update_mode=dict(
                 unit='timesteps',
                 batch_size=8,
@@ -169,7 +169,7 @@ class MyDQNAgent(object):
             memory=dict(
                 type='replay',
                 include_next_states=True,
-                capacity=100
+                capacity=200
             ),
             optimizer=dict(
                 type='adam',
@@ -206,7 +206,7 @@ class Ball(pygame.sprite.Sprite):
         self.prev_y = 1
         tamaño = (len(mapa[0]),len(mapa))
 
-        states = dict(type='float',shape=(2,tamaño[0],tamaño[1]))
+        states = dict(type='float',shape=(3,tamaño[0],tamaño[1]))
         #states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
         actions = dict( type='int',shape=(1,),num_actions=5 )
         myAgent = MyDQNAgent(states,actions)
@@ -302,9 +302,8 @@ class Ball(pygame.sprite.Sprite):
             self.prev_y = self.map_y
 
 
-
 def main():
-    size = width, height = 300, 300
+    size = width, height = 150, 150
     screen = pygame.display.set_mode(size)
     pygame.display.set_caption('Maze')
     meta = (3,3)
@@ -342,6 +341,7 @@ def main():
 #    flat_mapa = []
     num_choques = 0
     mapa_anterior = copy.deepcopy(ball.mapa)
+    mapa_anterior2= copy.deepcopy(mapa_anterior)
     ball.q_agent.restore_model("./model")
 
     while stay:
@@ -356,14 +356,11 @@ def main():
                  stay=0
 
         num_pasos += 1
-        #for i in range(len(ball.mapa)):
-        #    for j in range(len(ball.mapa[0])):
-        #        flat_mapa.append(ball.mapa[i][j])
-        #flat_mapa.append(num_pasos)
 
         #actions = ball.q_agent.act(flat_mapa, deterministic=False)
-        actions = ball.q_agent.act([mapa_anterior, ball.mapa], deterministic=False)
-        #flat_mapa = []
+        actions = ball.q_agent.act([mapa_anterior2, mapa_anterior,
+                        ball.mapa], deterministic=False)
+        mapa_anterior2= copy.deepcopy(mapa_anterior)
         mapa_anterior = copy.deepcopy(ball.mapa)
         ball.moverse(actions)
         print(actions[0])

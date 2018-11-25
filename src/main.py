@@ -30,11 +30,23 @@ class Rectangulo(pygame.sprite.Sprite):
         self.image.fill(color)
         self.rect = self.image.get_rect(center=pos)
 
+"""
+## MAZE GENERATOR ##
+Based on Depth-first search algorithm:
+http://en.wikipedia.org/wiki/Maze_generation_algorithm#Depth-first_search
+  1. Start at a particular cell and call it the "exit."
+  2. Mark the current cell as visited, and get a list of its neighbors.
+     For each neighbor, starting with a randomly selected neighbor:
+       1. If that neighbor hasn't been visited, remove the wall between
+          this cell and that neighbor, and then recurse with that neighbor as
+          the current cell.
+__author__ = "Leonardo Vidarte"
+"""
 class Maze(pygame.sprite.Sprite):
     def __init__(self, screen, width=21, height=21, exit_cell=(1, 1)):
         pygame.sprite.Sprite.__init__(self)
         if width % 2 == 0:
-            width += 1 
+            width += 1
         if height % 2 == 0:
             height += 1
         self.width = width
@@ -159,8 +171,8 @@ class MyDQNAgent(object):
         self.q_agent = DQNAgent(states, actions,
             network = [dict(type='conv2d', size=3),
                 dict(type='flatten'),
-                dict(type='dense', size=32),
-                dict(type='dense', size=32)],
+                dict(type='dense', size=64),
+                dict(type='dense', size=64)],
             update_mode=dict(
                 unit='timesteps',
                 batch_size=8,
@@ -169,7 +181,7 @@ class MyDQNAgent(object):
             memory=dict(
                 type='replay',
                 include_next_states=True,
-                capacity=100
+                capacity=200
             ),
             optimizer=dict(
                 type='adam',
@@ -206,7 +218,7 @@ class Ball(pygame.sprite.Sprite):
         self.prev_y = 1
         tamaño = (len(mapa[0]),len(mapa))
 
-        states = dict(type='float',shape=(2,tamaño[0],tamaño[1]))
+        states = dict(type='float',shape=(3,tamaño[0],tamaño[1]))
         #states = dict( type='float',shape=(tamaño[0]*tamaño[1]+1,) )
         actions = dict( type='int',shape=(1,),num_actions=5 )
         myAgent = MyDQNAgent(states,actions)
@@ -341,6 +353,9 @@ def main():
     intento = 0
 #    flat_mapa = []
     mapa_anterior = copy.deepcopy(ball.mapa)
+    mapa_anterior2= copy.deepcopy(mapa_anterior)
+
+    tot_reward = 0
 
     while stay:
         clock.tick(fps)
@@ -359,15 +374,20 @@ def main():
         #        flat_mapa.append(ball.mapa[i][j])
         #flat_mapa.append(num_pasos/300)
 
-        actions = ball.q_agent.act([mapa_anterior, ball.mapa], deterministic=False)
+        actions = ball.q_agent.act([mapa_anterior2, mapa_anterior,
+                        ball.mapa], deterministic=False)
         #actions = ball.q_agent.act(flat_mapa, deterministic=False)
         #flat_mapa = []
+        mapa_anterior2= copy.deepcopy(mapa_anterior)
         mapa_anterior = copy.deepcopy(ball.mapa)
         ball.moverse(actions[0])
 
         if (num_pasos>=300):
             print("Reset")
-            ball.q_agent.observe(1,0)
+            ball.q_agent.observe(1,-20)
+            tot_reward += -20
+            print("Recompensa total: %d" %tot_reward)
+            tot_reward=0
             print("Intento: %d" %intento)
             intento+=1
             num_pasos=0
@@ -378,12 +398,16 @@ def main():
             ball.reset(1,1,maze.maze)
         elif (maze.buscarColisiones(ball.map_x, ball.map_y)==1):
             #print("Choque")
-            ball.q_agent.observe(0,-10)
+            tot_reward += -5
+            ball.q_agent.observe(0,-5)
             ball.move_back()
         elif(maze.buscarColisiones(ball.map_x, ball.map_y)==2):
             print("Meta")
             print("Num. pasos: %d" %num_pasos)
-            ball.q_agent.observe(1,700-num_pasos)
+            ball.q_agent.observe(1,310-num_pasos)
+            tot_reward = tot_reward + 310 - num_pasos
+            print("Recompensa total: %d" %tot_reward)
+            tot_reward=0
             print("Intento: %d" %intento)
             intento+=1
             num_pasos=0
@@ -394,17 +418,19 @@ def main():
             ball.reset(1,1,maze.maze)
         elif((ball.map_x != ball.prev_x)or(ball.map_y != ball.prev_y)):
             #print("Movida")
-            ball.q_agent.observe(0,1)
+            tot_reward+=-1
+            ball.q_agent.observe(0,-1)
         else:
             #print("Alto")
+            tot_reward+=-40
             ball.q_agent.observe(0,-40)
 
-        #screen.blit(background,(0, 0))
-        #sprites.update()
-        #sprites.draw(screen)
-        #maze.show()
-        #sprites.draw(screen)
-        #pygame.display.flip()
+        screen.blit(background,(0, 0))
+        sprites.update()
+        sprites.draw(screen)
+        maze.show()
+        sprites.draw(screen)
+        pygame.display.flip()
         #input()
 
     pygame.quit()
